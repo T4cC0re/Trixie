@@ -1,0 +1,5 @@
+/.idea
+/worker/tsd/
+/worker/node_modules/
+/worker/lib/
+/worker/.govmomi/
