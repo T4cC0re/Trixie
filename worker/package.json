@@ -3,8 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "dependencies": {
-    "@types/node": "^8.0.26",
-    "@types/request-promise-native": "^1.0.6",
+    "ip": "^1.1.5",
+    "netmask": "^1.0.6",
+    "ping": "^0.2.2",
     "request": "^2.81.0",
     "request-promise-native": "^1.0.4"
   },
@@ -12,7 +13,11 @@
     "postinstall": "tsc -p ."
   },
   "devDependencies": {
-    "typescript": "^2.1"
+    "typescript": "^2.1",
+    "@types/ip": "0.0.30",
+    "@types/netmask": "^1.0.30",
+    "@types/node": "^8.0.26",
+    "@types/request-promise-native": "^1.0.6"
   },
   "main": "./lib/trixie.js",
   "typings": "./tsd/trixie.d.ts"
