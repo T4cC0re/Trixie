@@ -7,10 +7,8 @@ import {delimiter, join} from "path";
 
 export class GOVCWrapper {
 
-    private binary: string;
-
-    public constructor(private username: string, private password: string, private vcenter: string) {
-        this.binary = GOVCWrapper.detectBinary('govc');
+    public constructor(private username: string, private password: string, private vcenter: string, private binary: string = null) {
+        this.binary = GOVCWrapper.detectBinary('govc', binary);
         if (!this.binary) {
             throw new Error('unable to find govc');
         }
@@ -90,6 +88,11 @@ export class GOVCWrapper {
     };
 
     public launch = async(...params: string[]): Promise<SpawnSyncReturns<string>> => {
+        if (params.length >= 1 && params[0] == 'env'){
+            console.error('env command is prohibited');
+            return null;
+        }
+
         return spawnSync(
             this.binary,
             params,

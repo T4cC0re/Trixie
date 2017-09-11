@@ -72,11 +72,11 @@ export class SRVDB {
      * @param {string} password
      * @param {string} servercfg
      */
-    public constructor(/*private username: string, private password: string, */private servercfg: string = 'http://servercfg.bigpoint.net') {
+    public constructor(private username: string, private password: string, private servercfg: string = 'http://servercfg.bigpoint.net') {
     }
 
     private call_internal = async (req: SRVDBRequest): Promise<SRVDBResponse> => {
-        const url = `${this.servercfg}/cmd-ip.php?fmt=json`;
+        const url = `${this.servercfg}/cmd.php?fmt=json`;
         const result = await this.request({
             uri: url,
             method: 'POST',
@@ -85,10 +85,10 @@ export class SRVDB {
             headers: {
                 'content-type': 'application/json'
             },
-            // auth: {
-            //     user: this.username,
-            //     password: this.password
-            // }
+            auth: {
+                user: this.username,
+                password: this.password
+            }
         });
 
         if (result.error) {
@@ -111,8 +111,9 @@ export class SRVDB {
 
         return resp.cmds[0].props;
     };
+
     public getValues = async (host: string, ...properties: string[]): Promise<string[]> => {
-        return Object.values(await this.get(host, ...properties));
+        return (Object as any).values(await this.get(host, ...properties));
     };
 
     public del = async (host: string, ...properties: string[]): Promise<boolean> => {
@@ -342,20 +343,13 @@ export class SRVDB {
         return ip;
     };
 
-    public purge = async (host: string): Promise<boolean> => {
-       await this.del(host, 'svc', 'app', 'dhcp', 'dyndns', 'gpg', 'heartbeat', 'keytab', 'monitoring', 'mysql', 'network', 'os', 'perf', 'vpn', 'syncbase', 'apt');
-       await this.dyndns(host, 'purge');
-       // TODO: monitor purge <host>
-       return true;
-    };
-
     public freeip = async (network: string): Promise<string> => {
         // Try last IP from srvdb:
         let tmp = await this.getValues('_freeip', `last.${network}`);
         if (tmp && tmp.length > 0) {
             try {
                 return await this.checkip(tmp[0], network);
-            } catch (e: Error) {
+            } catch (e) {
                 console.error(`ip ${tmp[0]} unsusable. ${e.message}`);
             }
         }

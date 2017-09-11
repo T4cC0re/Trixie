@@ -1,0 +1,32 @@
+{
+  "pinf614": {
+    "isPinf": true,
+    "networks": [
+      "614_prod_nuev",
+      "4_pub_nuev"
+    ],
+    "srvdb": "pinf614",
+    "DOM": "auto",
+    "comment": "pinf networks automatically have _1 and _2 generated"
+  },
+  "nuev1": {
+    "DOM": "DOM1",
+    "networks": [
+      "200_prod_nuev",
+      "4_pub_nuev",
+      "3900_nfs_nuev",
+      "3950_ha_nuev"
+    ],
+    "comment": "P1 Network"
+  },
+  "nuev2": {
+    "DOM": "DOM2",
+    "networks": [
+      "599_prod_nuev",
+      "4_pub_nuev",
+      "3901_nfs_nuev",
+      "3951_ha_nuev"
+    ],
+    "comment": "P1 Network"
+  }
+}
