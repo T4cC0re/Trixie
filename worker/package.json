@@ -4,6 +4,8 @@
   "private": true,
   "dependencies": {
     "@types/restify": "^5.0.3",
+    "jsonwebtoken": "^8.0.1",
+    "ldap-verifyuser": "github:T4cC0re/ldap-verifyuser#test-new-upstream-ldapjs",
     "ip": "^1.1.5",
     "libError": "github:T4cC0re/libError",
     "libRPC": "github:T4cC0re/libRPC",
@@ -23,6 +25,7 @@
     "@types/netmask": "^1.0.30",
     "@types/node": "^8.0.28",
     "@types/request-promise-native": "^1.0.6",
+    "@types/jsonwebtoken": "^7.2.3",
     "typescript": "^2.1"
   },
   "main": "./lib/trixie.js",

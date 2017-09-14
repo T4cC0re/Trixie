@@ -5,6 +5,8 @@ import {Platform1} from "./platform1";
 import {VMWare} from "./vmware";
 import {ActionOutput, ActionRunner} from "./ActionRunner";
 import {createServer, Next, Request, Response, plugins} from 'restify';
+import * as jsonwebtoken from 'jsonwebtoken'
+import Err = ts.server.Msg.Err;
 
 const vmware = new VMWare(process.env['GOVC_USERNAME'], process.env['GOVC_PASSWORD'], 'https://vcenter-1054-vcs-01.bigpoint.net', 'C:\\Users\\hmeyer\\scripts\\govc.exe');
 const govc = vmware.govc;
@@ -25,6 +27,98 @@ const auth = async (req: Request): Promise<boolean> => {
 };
 
 /**
+ * GET|POST /auth
+ * GET - Supply Basic auth to retrieve a token.
+ *
+ * @param {Request} req
+ * @param {Response} res
+ * @param {Next} next
+ * @returns {Promise<void>}
+ */
+const loginOrRefresh = async (req: Request, res: Response, next: Next) => {
+    if (req.authorization
+        && req.authorization.basic
+        && req.authorization.basic.username
+        && req.authorization.basic.password
+    ) {
+        const verify = require('ldap-verifyuser');
+        var config = {
+            server: 'ldaps://adldap-460-03.bigpoint.net',
+            adrdn: 'BIGPOINT\\',
+            adquery: 'dc=BIGPOINT,dc=LOCAL',
+            debug: true,
+            rawAdrdn: false,
+            tlsOptions: {rejectUnauthorized: false}
+        };
+
+        verify.verifyUser(config, req.authorization.basic.username, req.authorization.basic.password, function (err: Error, data: any) {
+            if (err) {
+                console.error('error', err);
+            } else {
+                console.log('valid?', data.valid);
+                console.log('locked?', data.locked);
+                console.log('raw data available?', !!data.raw);
+            }
+            if (data.valid && !data.locked) {
+                // console.log(data.raw);
+
+                if (!data.raw || !data.raw.dn) {
+                    console.error("User does not have DN.");
+                    res.send(500);
+                    res.end();
+                }
+
+                const groups: string[] = [];
+
+                for (const groupItem of data.raw.memberOf || {}) {
+                    try {
+                        groups.push(/CN=([^,]*)/i.exec(groupItem)[1]);
+                    } catch (_) {
+                    }
+                }
+
+                const userObj = {
+                    groups: groups,
+                    dn: data.raw.dn,
+                    name: data.raw.cn || "unknown",
+                    mail: data.raw.mail || "unknown@example.com",
+                    uid: parseInt(data.raw.uidNumber || 65534, 10),
+                    title: data.raw.title || "unknown",
+                    iat: Math.floor(Date.now() / 1000) - 30, //backdate 30sec for time-drift
+                    exp: Math.floor(Date.now() / 1000) + (60 * 60) // Valid for an hour (+30sec)
+                    // BP SSH Keys: msExchExtensionCustomAttribute1
+                };
+
+                const token = jsonwebtoken.sign(
+                    userObj,
+                    "Trixie",
+                    {
+                        subject: userObj.dn,
+                        issuer: "Trixie",
+                        algorithm: "HS512",
+                    }
+                );
+
+                console.log(token);
+                res.send(200, {code: 200, token: token, tokenValidity: Math.floor(Date.now() / 1000)});
+                res.end();
+                return next();
+            } else {
+                res.header('WWW-Authenticate', 'Basic realm="Trixie Authentication"');
+                res.send(401, {code: 401, error: "Unauthorized"});
+                res.end();
+                return next();
+            }
+        });
+    } else {
+        res.header('WWW-Authenticate', 'Basic realm="Trixie Authentication"');
+        res.send(401, {code: 401, error: "Unauthorized | Refresh not yet implemented"});
+        res.end();
+        return next();
+    }
+};
+
+/**
  * GET|POST /action/:action
  * GET if action does not accept parameters
  * POST if :action should be supplied with parameters (generally preferred over GET)
@@ -40,22 +134,22 @@ const auth = async (req: Request): Promise<boolean> => {
  */
 const performAction = async (req: Request, res: Response, next: Next) => {
     if (!await auth(req)) {
-       res.send(401, {code: 401, error: "Unauthorized"});
-       res.end();
-       return next();
+        res.send(401, {code: 401, error: "Unauthorized"});
+        res.end();
+        return next();
     } else if (!req.params.action) {
-       res.send(400, {code: 400, error: "No action specified"});
-       res.end();
-       return next();
+        res.send(400, {code: 400, error: "No action specified"});
+        res.end();
+        return next();
     }
 
     let params = [];
 
-    if (req.isUpload()){
+    if (req.isUpload()) {
 
     }
 
-    if (typeof req.body === 'object'){
+    if (typeof req.body === 'object') {
         if (req.body.params && req.body.params.length) {
             params = req.body.params;
         }
@@ -96,7 +190,8 @@ server.use(plugins.gzipResponse());
 server.use(plugins.authorizationParser());
 server.post('/action/:action', performAction);
 server.get('/action/:action', performAction);
-server.listen(8080, function() {
+server.get('/auth', loginOrRefresh)
+server.listen(8080, function () {
     console.log('%s listening at %s', server.name, server.url);
 });
 
