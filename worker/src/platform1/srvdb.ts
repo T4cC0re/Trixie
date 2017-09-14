@@ -76,7 +76,7 @@ export class SRVDB {
     }
 
     private call_internal = async (req: SRVDBRequest): Promise<SRVDBResponse> => {
-        const url = `${this.servercfg}/cmd.php?fmt=json`;
+        const url = `${this.servercfg}/cmd-ip.php?fmt=json`;
         const result = await this.request({
             uri: url,
             method: 'POST',
@@ -278,6 +278,17 @@ export class SRVDB {
         }
 
         return hosts;
+    };
+
+    /**
+     * Check if a given MAC address is available / not in srvdb.
+     * @param {string} mac
+     * @returns {Promise<boolean>}
+     */
+    public macAvailable = async (mac:string): Promise<boolean> => {
+        if (!mac) return false;
+        console.log(`checking MAC ${mac} against SRVDB`);
+        return ! (await this.search(`macs.%=${mac}`)).length
     };
 
     /**
