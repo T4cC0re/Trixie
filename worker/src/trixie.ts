@@ -6,10 +6,8 @@ import {VMWare} from "./vmware";
 import {ActionOutput, ActionRunner} from "./ActionRunner";
 import {createServer, Next, Request, Response, plugins} from 'restify';
 import * as jsonwebtoken from 'jsonwebtoken'
-import Err = ts.server.Msg.Err;
 
 const vmware = new VMWare(process.env['GOVC_USERNAME'], process.env['GOVC_PASSWORD'], 'https://vcenter-1054-vcs-01.bigpoint.net', 'C:\\Users\\hmeyer\\scripts\\govc.exe');
-const govc = vmware.govc;
 const p1 = new Platform1(process.env['GOVC_USERNAME'], process.env['GOVC_PASSWORD']);
 const ar = new ActionRunner(vmware, p1);
 

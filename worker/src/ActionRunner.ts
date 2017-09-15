@@ -87,7 +87,7 @@ export class ActionRunner {
 
         let script = null;
         try {
-            script = new Script(readFileSync(`${__dirname}/../actions/${action[0]}.js`).toString('utf-8'));
+            script = new Script(readFileSync(`${__dirname}/../actions/${action[0].replace('.', '/').toLowerCase()}.js`).toString('utf-8'));
         } catch (e) {
             return {
                 stderr: '',
