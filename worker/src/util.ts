@@ -22,5 +22,6 @@ export class Util {
      */
     static generateVMWareMac = (): string => {
         return Util.generateMac('00:50:56:');
-    }
+    };
+
 }

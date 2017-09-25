@@ -193,7 +193,7 @@ export class SRVDB {
                 cmd: 'history',
                 host: host,
                 props: properties.length && properties || [''],
-                onlycurrent: onlycurrent
+                onlycurrent: onlycurrent || false
             } as SRVCmd
         ];
 

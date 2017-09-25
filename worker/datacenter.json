@@ -5,9 +5,7 @@
       "614_prod_nuev",
       "4_pub_nuev"
     ],
-    "srvdb": "pinf614",
-    "DOM": "auto",
-    "comment": "pinf networks automatically have _1 and _2 generated"
+    "chefEnv": "pinf614",
   },
   "nuev1": {
     "DOM": "DOM1",

@@ -7,8 +7,10 @@ import {ActionOutput, ActionRunner} from "./ActionRunner";
 import {createServer, Next, Request, Response, plugins} from 'restify';
 import * as jsonwebtoken from 'jsonwebtoken'
 
-const vmware = new VMWare(process.env['GOVC_USERNAME'], process.env['GOVC_PASSWORD'], 'https://vcenter-1054-vcs-01.bigpoint.net', 'C:\\Users\\hmeyer\\scripts\\govc.exe');
-const p1 = new Platform1(process.env['GOVC_USERNAME'], process.env['GOVC_PASSWORD']);
+const globalConfig:any = require("../config.json");
+
+const vmware = new VMWare(globalConfig.ADCredentials.username, globalConfig.ADCredentials.password, 'https://vcenter-1054-vcs-01.bigpoint.net', 'C:\\Users\\hmeyer\\scripts\\govc.exe');
+const p1 = new Platform1(globalConfig.ADCredentials.username, globalConfig.ADCredentials.password);
 const ar = new ActionRunner(vmware, p1);
 
 interface TrixieResponse {
@@ -20,8 +22,21 @@ interface TrixieResponse {
 }
 
 const auth = async (req: Request): Promise<boolean> => {
-    // TODO: Actual auth
-    return true;
+    const token = req.header('X-Trixie-Auth');
+    if(!token) {
+        return false;
+    }
+
+    try {
+        const payload:any = jsonwebtoken.verify(token, globalConfig.JWTSecret);
+        return (
+            (payload.groups as string[]).some(group => globalConfig.groups.includes(group))
+            || (globalConfig.users as string[]).includes(payload.sub)
+        );
+    } catch (e) {
+        logError(e);
+        return false;
+    }
 };
 
 /**
@@ -31,16 +46,15 @@ const auth = async (req: Request): Promise<boolean> => {
  * @param {Request} req
  * @param {Response} res
  * @param {Next} next
- * @returns {Promise<void>}
  */
-const loginOrRefresh = async (req: Request, res: Response, next: Next) => {
+const loginOrRefresh = (req: Request, res: Response, next: Next) => {
     if (req.authorization
         && req.authorization.basic
         && req.authorization.basic.username
         && req.authorization.basic.password
     ) {
         const verify = require('ldap-verifyuser');
-        var config = {
+        const config = {
             server: 'ldaps://adldap-460-03.bigpoint.net',
             adrdn: 'BIGPOINT\\',
             adquery: 'dc=BIGPOINT,dc=LOCAL',
@@ -49,13 +63,9 @@ const loginOrRefresh = async (req: Request, res: Response, next: Next) => {
             tlsOptions: {rejectUnauthorized: false}
         };
 
-        verify.verifyUser(config, req.authorization.basic.username, req.authorization.basic.password, function (err: Error, data: any) {
+        verify.verifyUser(config, req.authorization.basic.username, req.authorization.basic.password, (err: Error, data: any) => {
             if (err) {
-                console.error('error', err);
-            } else {
-                console.log('valid?', data.valid);
-                console.log('locked?', data.locked);
-                console.log('raw data available?', !!data.raw);
+                logError(err);
             }
             if (data.valid && !data.locked) {
                 // console.log(data.raw);
@@ -89,7 +99,7 @@ const loginOrRefresh = async (req: Request, res: Response, next: Next) => {
 
                 const token = jsonwebtoken.sign(
                     userObj,
-                    "Trixie",
+                    globalConfig.JWTSecret,
                     {
                         subject: userObj.dn,
                         issuer: "Trixie",
@@ -97,8 +107,7 @@ const loginOrRefresh = async (req: Request, res: Response, next: Next) => {
                     }
                 );
 
-                console.log(token);
-                res.send(200, {code: 200, token: token, tokenValidity: Math.floor(Date.now() / 1000)});
+                res.send(200, {code: 200, token: token, tokenValidity: userObj.exp});
                 res.end();
                 return next();
             } else {
