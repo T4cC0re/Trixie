@@ -3,6 +3,7 @@
 /worker/node_modules/
 /worker/lib/
 /worker/.govmomi/
+/worker/actions/
 
 node_modules/
 /worker/config.json

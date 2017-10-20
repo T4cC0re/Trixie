@@ -85,10 +85,10 @@ export class SRVDB {
             headers: {
                 'content-type': 'application/json'
             },
-            auth: {
-                user: this.username,
-                password: this.password
-            }
+            // auth: {
+            //     user: this.username,
+            //     password: this.password
+            // }
         });
 
         if (result.error) {

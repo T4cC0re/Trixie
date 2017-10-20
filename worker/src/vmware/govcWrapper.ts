@@ -93,7 +93,7 @@ export class GOVCWrapper {
             return null;
         }
 
-        const proc = spawnSync(
+        return spawnSync(
             this.binary,
             params,
             {
@@ -107,8 +107,6 @@ export class GOVCWrapper {
                 shell: false,
                 encoding: 'utf8'
             }
-        );
-
-        return proc;
+        );;
     }
 }

@@ -13,7 +13,7 @@ const StreamCache = require('stream-cache');
 
 interface Sandbox extends Global {
     process: Process
-    ActionRunner: ActionRunner
+    subAction: <T>(action: string, ...args: any[]) => Promise<T>
     vmware: VMWare
     platform1: Platform1
     Util: Util
@@ -21,29 +21,32 @@ interface Sandbox extends Global {
     action: Function | null
 }
 
-export interface ActionOutput {
+export interface ActionOutput<T> {
     stdout: string
     stderr: string
-    returnValue: any
+    returnValue: T
     error?: Error
 }
 
 export class ActionRunner {
-    constructor(private vmware: VMWare, private p1: Platform1) {}
+    constructor(private vmware: VMWare, private p1: Platform1) {
+    }
 
     private gatherOutput = (sandbox: Sandbox): { stdout: string, stderr: string } => {
         let stdout = "";
         let stderr = "";
 
-        try{
+        try {
             stdout = (sandbox.process.stdout as any)._buffers
                 .reduce((prev: string, buffer: Buffer) => prev + buffer.toString('utf-8'));
-        } catch (_) {}
+        } catch (_) {
+        }
 
-        try{
+        try {
             stderr = (sandbox.process.stderr as any)._buffers
                 .reduce((prev: string, buffer: Buffer) => prev + buffer.toString('utf-8'));
-        } catch (_) {}
+        } catch (_) {
+        }
 
         return {
             stdout: stdout,
@@ -51,16 +54,26 @@ export class ActionRunner {
         }
     };
 
+    private runSubAction = async <T>(parentSandbox: Sandbox, action: string, ...args: any[]): Promise<T> => {
+        const subAction = await this.run<T>(action, ...args);
+        parentSandbox.process.stdout.write(subAction.stdout);
+        parentSandbox.process.stderr.write(subAction.stderr);
+        if (subAction.error) {
+            throw subAction.error;
+        }
+        return subAction.returnValue;
+    };
+
     private buildSandbox = (): Sandbox => {
         const sandbox = Object.assign(
             {},
             global,
             {
-                ActionRunner: this,
                 vmware: this.vmware,
                 platform1: this.p1,
                 Util: Util,
-                action: null
+                action: null,
+                subAction: null
             }
         );
 
@@ -78,21 +91,19 @@ export class ActionRunner {
             sandbox.process.stdout,
             sandbox.process.stderr
         );
+        sandbox.subAction = (action: string, ...args: any[]) => {
+            return this.runSubAction(sandbox, action, ...args);
+        };
 
         return sandbox;
     };
 
-    public run = async (...action: string[]): Promise<ActionOutput> => {
-        console.error(`Running action '${action[0]}'...`);
+    public run = async <T>(action: string, ...args: any[]): Promise<ActionOutput<T>> => {
+        console.error(`Running action '${action}'...`);
 
         let script = null;
         try {
-            script = new Script(
-                readFileSync(`${__dirname}/../actions/${
-                    action[0].replace('.', '/').toLowerCase()
-                }.js`)
-                    .toString('utf-8')
-            );
+            script = new Script(readFileSync(`${__dirname}/../actions/${action.replace('.', '/').toLowerCase()}.js`).toString('utf-8'));
         } catch (e) {
             return {
                 stderr: '',
@@ -106,12 +117,12 @@ export class ActionRunner {
 
         script.runInNewContext(
             sandbox,
-            {filename: action[0], displayErrors: true}
+            {filename: action, displayErrors: true}
         );
 
         let returnValue: any;
         try {
-            returnValue = await sandbox.action(...action.slice(1)) || null;
+            returnValue = await sandbox.action(...args) || null;
             return Object.assign(
                 {},
                 this.gatherOutput(sandbox),

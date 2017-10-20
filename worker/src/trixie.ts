@@ -7,7 +7,7 @@ import {ActionOutput, ActionRunner} from "./ActionRunner";
 import {createServer, Next, Request, Response, plugins} from 'restify';
 import * as jsonwebtoken from 'jsonwebtoken'
 
-const globalConfig:any = require("../config.json");
+const globalConfig: any = require("../config.json");
 
 const vmware = new VMWare(globalConfig.ADCredentials.username, globalConfig.ADCredentials.password, 'https://vcenter-1054-vcs-01.bigpoint.net', 'C:\\Users\\hmeyer\\scripts\\govc.exe');
 const p1 = new Platform1(globalConfig.ADCredentials.username, globalConfig.ADCredentials.password);
@@ -197,7 +197,7 @@ server.use(plugins.gzipResponse());
 server.use(plugins.authorizationParser());
 server.post('/action/:action', performAction);
 server.get('/action/:action', performAction);
-server.get('/auth', loginOrRefresh)
+server.get('/auth', loginOrRefresh);
 server.listen(8080, function () {
     console.log('%s listening at %s', server.name, server.url);
 });
