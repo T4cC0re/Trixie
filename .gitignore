@@ -1,9 +1,8 @@
 /.idea
-/worker/tsd/
-/worker/node_modules/
-/worker/lib/
-/worker/.govmomi/
-/worker/actions/
-
-node_modules/
-/worker/config.json
+/node_modules/
+.govmomi/
+**/*.js
+**/*.js.map
+**/*.d.ts
+!/shared/Action.d.ts
+/config.json

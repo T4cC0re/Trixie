@@ -1,0 +1,42 @@
+{
+  "pinf": {
+    "isPinf": true,
+    "domain": "auto",
+    "networks": [
+      "$PINF_prod_nuev",
+      "4_pub_nuev"
+    ],
+    "comment": "Override chef environments in chefenv.json"
+  },
+  "debug": {
+    "isPinf": false,
+    "domain": "debug",
+    "networks": [
+      "VM Network",
+      "v10"
+    ],
+    "comment": "Used in development"
+  },
+  "nuev1": {
+    "isPinf": false,
+    "domain": "DOM1",
+    "networks": [
+      "200_prod_nuev",
+      "4_pub_nuev",
+      "3900_nfs_nuev",
+      "3950_ha_nuev"
+    ],
+    "comment": "P1 Network"
+  },
+  "nuev2": {
+    "isPinf": false,
+    "domain": "DOM2",
+    "networks": [
+      "599_prod_nuev",
+      "4_pub_nuev",
+      "3901_nfs_nuev",
+      "3951_ha_nuev"
+    ],
+    "comment": "P1 Network"
+  }
+}
