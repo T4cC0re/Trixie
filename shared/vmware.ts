@@ -180,9 +180,9 @@ export class VMWare {
     return (Math.random() >= 0.5) ? bestCPUCluster.name : bestMemCluster.name;
   };
 
-  public getBestStorageInCluster = async (cluster: string): Promise<string> => {
+  public getBestStorageInDomain = async (domain: string): Promise<string> => {
     // This is not cached, as it's quite fast
-    cluster = cluster.replace(/^.*?(NUE-DOM|NUEv)(\d-Cluster-\d+)/, 'NUEv$2');
+    const cluster =`NUEv_NetApp_Cluster-${domain}`;
     const result: { Name: string, Info: any }[] = JSON.parse((await this._govc.launch('datastore.info', '-json', `${cluster}/*`)).stdout).Datastores;
     return result.sort((a, b) => a.Info.FreeSpace - b.Info.FreeSpace).slice(-1)[0].Name;
   };

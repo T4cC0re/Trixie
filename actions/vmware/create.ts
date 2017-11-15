@@ -33,8 +33,8 @@ const spawn = async (datacenter: string, cores: number, memory: number, disk: nu
     log(`Using dc ${dcConfig.domain} (${dcConfig.isPinf ? 'pinf' : 'platform1'}) to spawn ${os} ${osConfig.isTemplate ? 'from template' : 'via PXE'}...`);
 
     const cluster = await vmware.getLeastUsedCluster(dcConfig.domain);
-    const storage = await vmware.getBestStorageInCluster(cluster);
-    const host = await vmware.getHostInCluster(cluster);
+    const storage = await vmware.getBestStorageInDomain(dcConfig.domain);
+    const host    = await vmware.getHostInCluster(cluster);
 
     log(`Detected cluster ${cluster} to have the most free resources`);
     log(`Using storage '${storage}'`);
