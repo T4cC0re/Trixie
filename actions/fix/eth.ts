@@ -1,5 +1,5 @@
 'use strict';
-import '../../shared/Action'
+///<reference path="../shared/Action.d.ts"/>
 
 async function action(srvId: string, vmName: string, eth: number, network: string): Promise<boolean> {
   // Does the VM have a 2nd if?
@@ -11,6 +11,7 @@ async function action(srvId: string, vmName: string, eth: number, network: strin
 
   if (ethX) {
     if (ethX.Connectable.StartConnected === true && ethX.Connectable.Connected === true) {
+      error(ethX.MacAddress);
       error(`eth${eth} is already ok!`);
       // Synchronously register MAC for VM to be sure.
       const properties = {};
@@ -18,7 +19,7 @@ async function action(srvId: string, vmName: string, eth: number, network: strin
       await platform1.srvdb.set(srvId, properties);
       return true;
     } else {
-      error(`eth${eth} has broken config removing it!`);
+      error(`eth${eth} has broken config. removing it!`);
       if (/^([0-9a-f]{2}[:-]){5}([0-9a-f]{2})$/i.test(ethX.MacAddress)) {
         oldMAC = ethX.MacAddress.replace('-', ':');
       }
@@ -48,7 +49,7 @@ async function action(srvId: string, vmName: string, eth: number, network: strin
       while (!await platform1.srvdb.macAvailable(mac)) {
         mac = Util.generateVMWareMac();
       }
-      error(`Generated MAC ${oldMAC}`);
+      error(`Generated MAC ${mac}`);
     }
 
     // Asynchronously register mac for VM.

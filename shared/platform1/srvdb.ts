@@ -1,6 +1,6 @@
 'use strict';
-import { randomBytes } from "crypto";
-import { Netmask } from 'netmask'
+import { randomBytes } from 'crypto';
+import { Netmask } from 'netmask';
 import { toLong } from 'ip';
 
 const ping = require('ping').promise;
@@ -93,12 +93,12 @@ export class SRVDB {
       body: req,
       json: true,
       headers: {
-        'content-type': 'application/json'
+        'content-type': 'application/json',
       },
       auth: {
         user: this.username,
-        password: this.password
-      }
+        password: this.password,
+      },
     });
 
     if (result.error) {
@@ -113,8 +113,8 @@ export class SRVDB {
       {
         cmd: 'get',
         host: host,
-        props: properties.length && properties || ['']
-      } as SRVCmd
+        props: properties.length && properties || [''],
+      } as SRVCmd,
     ];
 
     const resp = await this.callInternal({cmds: cmds});
@@ -131,8 +131,8 @@ export class SRVDB {
       {
         cmd: 'del',
         host: host,
-        props: properties.length && properties || ['']
-      } as SRVCmd
+        props: properties.length && properties || [''],
+      } as SRVCmd,
     ];
 
     const resp = await this.callInternal({cmds: cmds});
@@ -149,8 +149,8 @@ export class SRVDB {
       {
         cmd: 'set',
         host: host,
-        props: Object.keys(properties).length && properties || []
-      } as SRVCmd
+        props: Object.keys(properties).length && properties || [],
+      } as SRVCmd,
     ];
 
     const resp = await this.callInternal({cmds: cmds});
@@ -167,8 +167,8 @@ export class SRVDB {
       {
         cmd: 'list',
         host: host,
-        props: properties.length && properties || ['']
-      } as SRVCmd
+        props: properties.length && properties || [''],
+      } as SRVCmd,
     ];
 
     const resp = await this.callInternal({cmds: cmds});
@@ -181,7 +181,7 @@ export class SRVDB {
     for (const prop of properties) {
       const tmp = prop.split('=', 2);
       if (tmp.length == 2) {
-        props[tmp[0]] = tmp[1]
+        props[tmp[0]] = tmp[1];
       }
     }
 
@@ -189,7 +189,7 @@ export class SRVDB {
       {
         cmd: 'propsearch',
         search: props,
-      } as SRVCmd
+      } as SRVCmd,
     ];
 
     const resp = await this.callInternal({cmds: cmds});
@@ -203,8 +203,8 @@ export class SRVDB {
         cmd: 'history',
         host: host,
         props: properties.length && properties || [''],
-        onlycurrent: onlycurrent || false
-      } as SRVCmd
+        onlycurrent: onlycurrent || false,
+      } as SRVCmd,
     ];
 
     const resp = await this.callInternal({cmds: cmds});
@@ -217,8 +217,8 @@ export class SRVDB {
       {
         cmd: 'call',
         method: method,
-        args: args
-      } as SRVCmd
+        args: args,
+      } as SRVCmd,
     ];
 
     const resp = await this.callInternal({cmds: cmds});
@@ -237,8 +237,8 @@ export class SRVDB {
       let cmds = [
         {
           cmd: 'textsearch',
-          search: queries.join(' ')
-        } as SRVCmd
+          search: queries.join(' '),
+        } as SRVCmd,
       ];
 
       const resp = await this.callInternal({cmds: cmds});
@@ -291,7 +291,7 @@ export class SRVDB {
   public macAvailable = async (mac: string): Promise<boolean> => {
     if (!mac) return false;
     console.log(`checking MAC ${mac} against SRVDB`);
-    return !(await this.search(`macs.%=${mac}`)).length
+    return !(await this.search(`macs.%=${mac}`)).length;
   };
 
   /**
@@ -312,7 +312,7 @@ export class SRVDB {
     // Check ip responds to ping
     const pingres = (await ping.probe(ip, {timeout: 1} as PingConfig)) as PingResponse;
     if (pingres.alive) {
-      throw new Error('IP responded to ping.')
+      throw new Error('IP responded to ping.');
     }
 
     // Check for duplicate IPs
@@ -407,7 +407,7 @@ export class SRVDB {
       try {
         return await this.checkip(ip, network);
       } catch (e) {
-        console.error(`ip ${ip} unsusable. ${e.message}`)
+        console.error(`ip ${ip} unsusable. ${e.message}`);
       }
     }
 
@@ -417,10 +417,10 @@ export class SRVDB {
       try {
         return await this.checkip(ip, network);
       } catch (e) {
-        console.error(`ip ${ip} unsusable. ${e.message}`)
+        console.error(`ip ${ip} unsusable. ${e.message}`);
       }
     }
 
     throw new Error(`no usable IP in ${network}`);
-  }
+  };
 }

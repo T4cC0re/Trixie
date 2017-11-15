@@ -1,5 +1,6 @@
 'use strict';
-import '../../shared/Action'
+
+///<reference path="../shared/Action.d.ts"/>
 
 async function action(...args: string[]) {
   const data = await platform1.srvdb.get(...args);

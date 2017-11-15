@@ -1,5 +1,5 @@
 'use strict';
-import '../../shared/Action'
+///<reference path="../shared/Action.d.ts"/>
 
 async function action(pattern: string): Promise<boolean> {
   const result = await platform1.srvdb.srvfind(pattern);

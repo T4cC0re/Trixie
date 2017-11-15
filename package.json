@@ -1,9 +1,11 @@
 {
-  "name": "trixie-worker",
+  "name": "trixie",
   "version": "0.0.0",
   "private": true,
   "dependencies": {
     "@types/restify": "^5.0.3",
+    "@types/ssh2": "^0.5.35",
+    "@types/ws": "^3.2.0",
     "ip": "^1.1.5",
     "jsonwebtoken": "^8.0.1",
     "ldap-verifyuser": "github:T4cC0re/ldap-verifyuser#test-new-upstream-ldapjs",
@@ -14,8 +16,10 @@
     "request": "^2.81.0",
     "request-promise-native": "^1.0.4",
     "restify": "^5.2.0",
+    "ssh2": "^0.5.5",
     "stream-cache": "0.0.2",
-    "stream-to-string": "^1.1.0"
+    "stream-to-string": "^1.1.0",
+    "ws": "^3.3.0"
   },
   "scripts": {
     "postinstall": "tsc -p ."

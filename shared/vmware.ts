@@ -1,6 +1,6 @@
 'use strict';
-import { GOVCWrapper } from "./vmware/govcWrapper";
-import { ChildRPC, ClientRPC } from "libRPC";
+import { GOVCWrapper } from './vmware/govcWrapper';
+import { ChildRPC, ClientRPC } from 'libRPC';
 
 interface PinfCfg {
   vlan: number
@@ -24,6 +24,23 @@ export interface OSConfig {
   guestName: string
 }
 
+export interface ClusterUtil {
+  [name: string]: {
+    name: string
+    mem: number
+    cpu: number
+  }
+}
+
+export interface ClusterHosts {
+  [cluster: string]: string[]
+}
+
+export interface VMWareData {
+  cluster: ClusterUtil
+  hostsInCluster: ClusterHosts
+}
+
 export class VMWare {
   private _govc: GOVCWrapper;
 
@@ -32,13 +49,42 @@ export class VMWare {
   }
 
   public get govc() {
-    return this._govc
+    return this._govc;
   };
 
-  private getVMWareData = async (): Promise<any> => {
+  public powerOn = async (vmName: string) => {
+    const proc = await this._govc.launch('vm.power', `-on`, vmName);
+
+    if (proc.status) {
+      throw new Error('Could not power on');
+    }
+  };
+
+  public powerOff = async (vmName: string, force: boolean) => {
+    const proc = await this._govc.launch('vm.power', `-off`, ...(force ? ['-force', vmName] : [vmName]));
+
+    if (proc.status) {
+      throw new Error('Could not power off');
+    }
+  };
+
+  public setBootOrder = async (vmName: string, order: string) => {
+    const proc = await this._govc.launch('device.boot', `-vm=${vmName}`, `-order=${order}`);
+
+    if (proc.status) {
+      throw new Error('Could not set boot-order');
+    }
+  };
+
+  /**
+   * Lookup VMWareData on master via RPC or fetch manually and push.
+   * Note: If no RPC is available always aggregates!
+   * @returns {Promise<VMWareData>}
+   */
+  private getVMWareData = async (): Promise<VMWareData> => {
     let data: any;
     if (this.rpc) {
-      data = await this.rpc.callOnMaster<any>('getVMWareData');
+      data = await this.rpc.callOnMaster<VMWareData>('getVMWareData');
       if (!data || !Object.keys(data).length) {
         data = await this.gatherVMWareData();
         await this.rpc.callOnMaster('updateVMWareData', data);
@@ -50,35 +96,79 @@ export class VMWare {
     return data;
   };
 
-  public gatherVMWareData = async (): Promise<any> => {
-    //TODO: Move VMWare data aggregation here.
+  public fakeAllocOnCluster = async (cluster: string, cores: number = 1, memory: number = 1): Promise<boolean> => {
+    if (!this.rpc) {
+      return true;
+    }
+    return await this.rpc.callOnMaster<boolean>('fakeAllocOnCluster', cluster, cores, memory);
+  };
+
+  /**
+   * Aggregate VMWareData for usage calculations.
+   * @returns {Promise<VMWareData>}
+   */
+  public gatherVMWareData = async (): Promise<VMWareData> => {
     console.log('gatherVMWareData');
-    return {a: "b"}
+
+    const data: VMWareData = {
+      cluster: {},
+      hostsInCluster: {},
+    };
+
+    // region gather cluster utilization
+    const clusters = JSON.parse((await  this._govc.launch('ls', '-json', 'host/*')).stdout).elements;
+    for (let cluster of clusters.map((element: any) => element.Path) as string[]) {
+      try {
+        //region gather cpu/memory
+        if (cluster.toLowerCase().includes('standalone')) {
+          continue;
+        }
+        // @see https://www.vmware.com/support/developer/converter-sdk/conv50_apireference/cluster_services_counters.html
+        const CPUUsage = JSON.parse((await this._govc.launch('metric.sample', '-json', cluster, 'clusterServices.effectivecpu.average')).stdout);
+        const memUsage = JSON.parse((await this._govc.launch('metric.sample', '-json', cluster, 'clusterServices.effectivemem.average')).stdout);
+        const freeCPUMHz = CPUUsage.Sample[0].Value[0].Value.slice(-1)[0] || 0;
+        const freeMemMiB = memUsage.Sample[0].Value[0].Value.slice(-1)[0] || 0;
+        console.log(cluster, 'freeCPU', freeCPUMHz, 'freeMem', freeMemMiB);
+        data.cluster[cluster] = {name: cluster, mem: freeMemMiB, cpu: freeCPUMHz};
+        //endregion
+      } catch (_ignore) {
+      }
+      try {
+        //region gather hosts for each cluster
+        data.hostsInCluster[cluster] = [];
+        const result: string = (await this._govc.launch('host.info', cluster)).stdout;
+        const hostRegex = /^Name:\s+(.*)$/;
+        result.split('\n').forEach((value: string) => {
+          let match;
+          if (match = hostRegex.exec(value)) {
+            data.hostsInCluster[cluster].push(match[1]);
+          }
+        });
+        //endregion
+      } catch (_ignore) {
+      }
+    }
+    // endregion
+    return data;
   };
 
   public getLeastUsedCluster = async (domain: string): Promise<string> => {
-
     const data = await this.getVMWareData();
-
-    const ls = JSON.parse((await  this._govc.launch('ls', '-json', `host/${domain}`)).stdout).elements;
 
     let bestMemCluster = null;
     let bestCPUCluster = null;
 
     // @see https://www.vmware.com/support/developer/converter-sdk/conv50_apireference/cluster_services_counters.html
-    for (let cluster of ls.map((element: any) => element.Path) as string[]) {
-      const CPUUsage = JSON.parse((await this._govc.launch('metric.sample', '-json', cluster, 'clusterServices.effectivecpu.average')).stdout);
-      const memUsage = JSON.parse((await this._govc.launch('metric.sample', '-json', cluster, 'clusterServices.effectivemem.average')).stdout);
-      const freeCPUMHz = CPUUsage.Sample[0].Value[0].Value.slice(-1);
-      const freeMemMiB = memUsage.Sample[0].Value[0].Value.slice(-1);
-      if (!bestCPUCluster || bestCPUCluster.cpu < freeCPUMHz) {
-        bestCPUCluster = {name: cluster, mem: freeMemMiB, cpu: freeCPUMHz}
+    for (let cluster in data.cluster) {
+      if (!cluster.includes(domain)) {
+        continue;
       }
-      if (!bestMemCluster || bestMemCluster.mem < freeMemMiB) {
-        bestMemCluster = {name: cluster, mem: freeMemMiB, cpu: freeCPUMHz}
+      if (!bestCPUCluster || (bestCPUCluster.cpu < data.cluster[cluster].cpu)) {
+        bestCPUCluster = data.cluster[cluster];
       }
-      console.log(cluster, freeCPUMHz, freeMemMiB);
-      // return;//
+      if (!bestMemCluster || (bestMemCluster.mem < data.cluster[cluster].mem)) {
+        bestMemCluster = data.cluster[cluster];
+      }
     }
 
     // Cluster with most free CPU also has most free RAM
@@ -87,28 +177,19 @@ export class VMWare {
     }
 
     // Randomize best CPU and best RAM cluster
-    return (Math.random() >= 0.5) ? bestCPUCluster.name : bestMemCluster.name
+    return (Math.random() >= 0.5) ? bestCPUCluster.name : bestMemCluster.name;
   };
 
   public getBestStorageInCluster = async (cluster: string): Promise<string> => {
+    // This is not cached, as it's quite fast
     cluster = cluster.replace(/^.*?(NUE-DOM|NUEv)(\d-Cluster-\d+)/, 'NUEv$2');
     const result: { Name: string, Info: any }[] = JSON.parse((await this._govc.launch('datastore.info', '-json', `${cluster}/*`)).stdout).Datastores;
     return result.sort((a, b) => a.Info.FreeSpace - b.Info.FreeSpace).slice(-1)[0].Name;
   };
 
   public getHostInCluster = async (cluster: string): Promise<string> => {
-    // JSON is too slow here.
-    const result: string = (await this._govc.launch('host.info', cluster)).stdout;
-    const hostRegex = /^Name:\s+(.*)$/;
-    const hosts: string[] = [];
-    result.split('\n').forEach((value: string) => {
-      let match;
-      if (match = hostRegex.exec(value)) {
-        hosts.push(match[1]);
-      }
-    });
-
-    return hosts[Math.floor(Math.random() * hosts.length)];
+    const hosts = (await this.getVMWareData()).hostsInCluster[cluster] || [];
+    return hosts[Math.floor(Math.random() * hosts.length)] || null;
   };
 
   public loadOSConfig = (block: string, os: string): OSConfig => {
@@ -126,20 +207,61 @@ export class VMWare {
           isPXE: false,
           isTemplate: true,
           pxeTarget: null,
-          guestName: matches[1]
-        }
+          guestName: matches[1],
+        };
       } else {
         return {
           template: null,
           isPXE: true,
           isTemplate: false,
           pxeTarget: os,
-          guestName: matches[1]
-        }
+          guestName: matches[1],
+        };
       }
     } else {
-      throw new Error(`Malformatted OS in config.`)
+      throw new Error(`Malformatted OS in config.`);
     }
+  };
+
+  public getIP = async (vmName: string): Promise<string> => {
+    const proc = await this.govc.launch(`vm.ip`, `-wait`, `5s`, vmName);
+
+    if (proc.status) {
+      return null;
+    }
+    return proc.stdout.trim();
+  };
+
+  public enableHotAdd = async (vmName: string): Promise<boolean> => {
+    const proc = await this.govc.launch(`vm.change`, `-e`, `mem.hotadd=true`, `-e`, `vcpu.hotadd=true`, `-e`, `vcpu.hotremove=true`, `-vm=${vmName}`);
+
+    return !proc.status;
+  };
+
+  public setAttributes = async (vmName: string, createdBy: string, createdOn: number): Promise<void> => {
+    const proc1 = this.govc.launch(`fields.set`, `CreatedBy`, `trixie<${createdBy}>`, vmName);
+    const proc2 = this.govc.launch(`fields.set`, `CreatedOn`, (new Date(createdOn * 1000)).toISOString(), vmName);
+    await Promise.all([proc1, proc2]);
+  };
+
+  public waitForIP = (vmName: string, maxTime: number = 240): Promise<string> => {
+    return new Promise<string>(async (resolve, reject) => {
+      let interval: any, timeout: any;
+      const tryGetIP = async () => {
+        const ip = await this.getIP(vmName);
+        if (ip) {
+          clearInterval(interval);
+          clearTimeout(timeout);
+          return resolve(ip);
+        }
+        return;
+      };
+      interval = setInterval(tryGetIP, 10000);
+      timeout = setTimeout(() => {
+        clearInterval(interval);
+        reject(new Error('timeout'));
+      }, maxTime * 1000);
+    });
   };
 
   public loadDCConfig = (datacenter: string): DCConfig => {
@@ -156,24 +278,24 @@ export class VMWare {
         // The result can be accessed through the `m`-variable.
         pinf.vlan = parseInt(results[1], 10);
         pinf.domain = parseInt(results[2], 10);
-        pinf.name = `pinf${pinf.vlan}`
+        pinf.name = `pinf${pinf.vlan}`;
       } else {
-        throw new Error(`Could not parse pinf dc '${datacenter}'`)
+        throw new Error(`Could not parse pinf dc '${datacenter}'`);
       }
       tmpCfg.chefEnv = require('../chefenv.json')[pinf.name] || pinf.name;
-      tmpCfg.networks = tmpCfg.networks.map((net) => net.replace(`$PINF`, pinf.vlan));
+      tmpCfg.networks = tmpCfg.networks.map<string>((net) => net.replace('$PINF' as any, pinf.vlan as any)); // No idea why the TS compiler does not like this without 'any' casts
       if (!tmpCfg.domain || tmpCfg.domain == 'auto') {
         switch (pinf.domain) {
           case 1:
-            tmpCfg.domain = "DOM1";
+            tmpCfg.domain = 'DOM1';
             break;
           case 2:
-            tmpCfg.domain = "DOM2";
+            tmpCfg.domain = 'DOM2';
             break;
         }
       }
     }
 
     return tmpCfg;
-  }
+  };
 }

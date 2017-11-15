@@ -21,10 +21,9 @@ export class Platform1 {
   };
 
   public purge = async (host: string): Promise<boolean> => {
-    return !!(
-      await this._srvdb.del(host, 'svc', 'app', 'dhcp', 'dyndns', 'gpg', 'heartbeat', 'keytab', 'monitoring', 'mysql', 'network', 'os', 'perf', 'vpn', 'syncbase', 'apt') &&
-      await this._srvdb.dyndns(host, 'purge') &&
-      await this._monitor.purge(host)
-    );
+    const del = await this._srvdb.del(host, 'svc', 'app', 'dhcp', 'dyndns', 'gpg', 'heartbeat', 'keytab', 'monitoring', 'mysql', 'network', 'os', 'perf', 'vpn', 'syncbase', 'apt');
+    const dyndns = await this._srvdb.dyndns(host, 'purge');
+    const monitor = await this._monitor.purge(host);
+    return !!(del && dyndns === '' && monitor);
   };
 }

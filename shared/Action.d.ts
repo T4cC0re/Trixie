@@ -1,7 +1,9 @@
-///<reference path="../server/ActionRunner.d.ts"/>
-///<reference path="./vmare.d.ts"/>
-///<reference path="./platform1.d.ts"/>
-///<reference path="./util.d.ts"/>
+///<reference path="../server/ActionRunner.ts"/>
+///<reference path="../server/trixie.ts"/>
+///<reference path="./vmware.ts"/>
+///<reference path="./platform1.ts"/>
+///<reference path="./util.ts"/>
+///<reference path="./ssh.ts"/>
 
 type SubAction = <T>(action: string, ...args: any[]) => Promise<T>;
 
@@ -13,3 +15,5 @@ declare const platform1: Platform1;
 declare const Util: Util;
 declare const log: OutputLogger;
 declare const error: OutputLogger;
+declare const user: UserObject;
+declare const ssh: SSH;

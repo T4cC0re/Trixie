@@ -1,5 +1,6 @@
 'use strict';
-import '../../shared/Action'
+
+///<reference path="../shared/Action.d.ts"/>
 
 /**
  * @param {string} datacenter
@@ -7,77 +8,104 @@ import '../../shared/Action'
  * @param {number} memory
  * @param {number} disk
  * @param {string} os/template
+ * @param {number} count
  * @returns {Promise<string>} Path to vm in VMWare (e.g. vm/srv000000)
  */
-async function action(datacenter: string, cores: number, memory: number, disk: number, os: string) {
-  const dcConfig = vmware.loadDCConfig(datacenter);
-  const debug = dcConfig.domain === "debug";
-  const osConfig = vmware.loadOSConfig(dcConfig.isPinf ? "pinf" : "platform1", os);
-  log(osConfig);
-  log(`Using dc ${dcConfig.domain} (${dcConfig.isPinf ? "pinf" : "platform1"}) to spawn ${os} ${osConfig.isTemplate ? 'from template' : 'via PXE'}...`);
-  let cluster, storage, host;
-  if (debug) {
-    cluster = "-";
-    storage = "FreeNAS";
-    host = "soarin.localdomain";
-  } else {
-    cluster = await vmware.getLeastUsedCluster(dcConfig.domain);
-    storage = await vmware.getBestStorageInCluster(cluster);
-    host = await vmware.getHostInCluster(cluster);
+async function action(datacenter: string, cores: number, memory: number, disk: number, os: string, count: number) {
+  let spawns: Promise<string>[] = [];
+
+  for (let i = 0; i < count; i++) {
+    spawns.push(spawn(datacenter, cores, memory, disk, os));
   }
 
-  log(`Detected cluster ${cluster} to have the most free resources`);
-  log(`Using storage '${storage}'`);
-  log(`Using host '${host}'`);
+  const srvIds = await Promise.all(spawns);
 
-  const macs: { [net: string]: string } = {};
-  for (const net of dcConfig.networks) {
-    let mac = Util.generateVMWareMac();
-    if (!debug) {
+  log(`Successfully spawned:\n - ${srvIds.join(`\n - `)}`);
+
+}
+
+const spawn = async (datacenter: string, cores: number, memory: number, disk: number, os: string): Promise<string> => {
+  try {
+    const createDate = Math.round(Date.now() / 1000);
+    const dcConfig = vmware.loadDCConfig(datacenter);
+    const debug = dcConfig.domain === 'debug';
+    const osConfig = vmware.loadOSConfig(dcConfig.isPinf ? 'pinf' : 'platform1', os);
+    log(`Using dc ${dcConfig.domain} (${dcConfig.isPinf ? 'pinf' : 'platform1'}) to spawn ${os} ${osConfig.isTemplate ? 'from template' : 'via PXE'}...`);
+
+    const cluster = await vmware.getLeastUsedCluster(dcConfig.domain);
+    const storage = await vmware.getBestStorageInCluster(cluster);
+    const host = await vmware.getHostInCluster(cluster);
+
+    log(`Detected cluster ${cluster} to have the most free resources`);
+    log(`Using storage '${storage}'`);
+    log(`Using host '${host}'`);
+
+    if (!await vmware.fakeAllocOnCluster(cluster, cores, memory)) {
+      error(`could not fake allocate ${cores} CPU and ${memory} GiB RAM on cluster ${cluster}`);
+    }
+
+    log(`Generating MAC addresses...`);
+    const macs: { [net: string]: string } = {};
+    for (const net of dcConfig.networks) {
+      let mac = Util.generateVMWareMac();
       while (!await platform1.srvdb.macAvailable(mac)) {
         mac = Util.generateVMWareMac();
       }
+      macs[net] = mac;
     }
-    macs[net] = mac;
-  }
-  log(macs);
 
-  let srvId;
-  if (debug) {
-    srvId = "srv254254";
-  } else {
-    srvId = platform1.srvdb.regsrv(...dcConfig.networks.map((net: string) => macs[net]));
-  }
+    const srvId = await platform1.srvdb.regsrv(...dcConfig.networks.map((net: string) => macs[net]));
+    await platform1.srvdb.set(srvId, {net: dcConfig.isPinf ? dcConfig.networks[0] : datacenter || ''});
 
-  if (osConfig.isTemplate) {
-    await createFromTemplate(host, storage, disk, memory, cores, dcConfig.networks[0], macs[dcConfig.networks[0]], osConfig.template, srvId);
-  } else {
-    await createFromScratch(host, storage, disk, memory, cores, dcConfig.networks[0], macs[dcConfig.networks[0]], osConfig.guestName, srvId);
+    log(`Spawning as: ${srvId}`);
+
+    if (osConfig.isTemplate) {
+      log(`Spawning from template...`);
+      await createFromTemplate(host, storage, disk, memory, cores, dcConfig.networks[0], macs[dcConfig.networks[0]], osConfig.template, srvId);
+    } else {
+      await createFromScratch(host, storage, disk, memory, cores, dcConfig.networks[0], macs[dcConfig.networks[0]], osConfig.guestName, srvId);
+    }
+
+    for (const eth in dcConfig.networks) {
+      log(`Creating and registering ethernet-${eth} in srvdb...`);
+      await subAction('fix.eth', srvId, srvId, eth, dcConfig.networks[eth]);
+    }
+
     if (osConfig.isPXE) {
-      //TODO: Call to oneshor
+      if (dcConfig.isPinf) {
+        const mac1 = await platform1.srvdb.getValues(srvId, 'macs.0');
+        await ssh.execute('autoinstall-792-pinf600-01.bigpoint.net', 'svc_trixie', log, error, `/usr/local/bin/generate-pxe-configuration-for-mac.py --mac ${mac1} --target ${os}`);
+      } else {
+        await ssh.execute(`autoinstall.${datacenter}.bigpoint.net`, 'svc_trixie', log, error, `/home/autoinstall/scripts/setoneshot ${srvId} ${os}`);
+      }
     }
-  }
 
-  for (const eth in dcConfig.networks) {
-    if ((eth as any as number) == 0) {
-      continue;
+    const bootorder = osConfig.isTemplate ? 'disk' : 'ethernet,disk';
+
+    log(`Setting boot-order, hot-add and sttributes...`);
+    await Promise.all([vmware.enableHotAdd(srvId), vmware.setAttributes(srvId, user.account, createDate), vmware.setBootOrder(srvId, bootorder)]);
+
+    log(`Powering on...`);
+    await vmware.powerOn(srvId);
+
+    if (dcConfig.isPinf || osConfig.isTemplate) {
+      log(`Waiting for an IP...`);
+      // Wait 4 minutes for a template and 15 for a PXE install.
+      const ip = await vmware.waitForIP(srvId, osConfig.isTemplate ? 240 : 900);
+      log(`IP: ${ip}`);
+
+      // Hack for P1 ubuntu
+      if (os == 't_bp-xenial') {
+        log('Bootstrapping P1...');
+        await ssh.execute(ip, 'autoinstall', log, error, 'wget -q http://autoinstall.bigpoint.net/p1-ubuntu/slim-late.sh -O late.sh ; sudo bash late.sh');
+      }
     }
-    await subAction('fix.eth', srvId, srvId, eth, dcConfig.networks[eth]);
-  }
 
-  await setBootOrder(srvId, 'ethernet,disk');
+    log('Done');
 
-  return false;
-}
-
-const setBootOrder = async (srvId: string, order: string) => {
-  const proc = await vmware.govc.launch('device.boot', `-vm=${srvId}`, `-order=${order}`);
-
-  log(proc.stdout);
-  error(proc.stderr);
-
-  if (proc.status) {
-    throw new Error("Could not set boot-order");
+    return srvId;
+  } catch (_ignore) {
+    return 'failed!';
   }
 };
 
@@ -104,13 +132,13 @@ const createFromScratch = async (host: string,
     `-net.address=${mac}`,
     `-net.adapter=vmxnet3`,
     `-g=${guestOS}`,
-    srvId
+    srvId,
   );
   log(proc.stdout);
   error(proc.stderr);
 
   if (proc.status) {
-    throw new Error("Could not create VM");
+    throw new Error('Could not create VM');
   }
 };
 
@@ -135,13 +163,13 @@ const createFromTemplate = async (host: string,
     `-net.address=${mac}`,
     `-net.adapter=vmxnet3`,
     `-vm=${template}`,
-    srvId
+    srvId,
   );
   log(proc.stdout);
   error(proc.stderr);
 
   if (proc.status) {
-    throw new Error("Could not create VM");
+    throw new Error('Could not create VM');
   }
 
   proc = await vmware.govc.launch('vm.disk.change', `-vm=${srvId}`, `-size=${disk}GB`);
@@ -150,6 +178,6 @@ const createFromTemplate = async (host: string,
   error(proc.stderr);
 
   if (proc.status) {
-    error("Could not extend disk. Ignoring...");
+    error('Could not extend disk. Ignoring...');
   }
 };

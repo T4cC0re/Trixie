@@ -1,6 +1,6 @@
 'use strict';
-import '../../shared/Action'
-import { SRVHist } from "../../shared/platform1/srvdb";
+///<reference path="../shared/Action.d.ts"/>
+import { SRVHist } from '../../shared/platform1/srvdb';
 // const formatTimeStamp = require("lib/util").Util.formatTimeStamp;
 
 const formatTimeStamp = (ts: number) => {
@@ -12,7 +12,7 @@ const formatTimeStamp = (ts: number) => {
     date.getUTCHours().toString().padStart(2, '0')}:${
     date.getUTCMinutes().toString().padStart(2, '0')}:${
     date.getUTCSeconds().toString().padStart(2, '0')
-    }`
+    }`;
 };
 
 async function action(...args: string[]) {
@@ -34,6 +34,6 @@ async function action(...args: string[]) {
     .sort((a: SRVHist, b: SRVHist) => b.ts - a.ts);
 
   for (const hist of data) {
-    log(`${hist.user.padEnd(31, ' ')}${formatTimeStamp(hist.ts)} ${hist.name}=${hist.value}`)
+    log(`${hist.user.padEnd(31, ' ')}${formatTimeStamp(hist.ts)} ${hist.name}=${hist.value}`);
   }
 }
