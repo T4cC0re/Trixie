@@ -28,10 +28,6 @@ export class SSH {
             resolve(code <= 0);
           }).on('data', function (data: string) {
             stdout('STDOUT: ' + data);
-          }).on('exit', function (...arg: any[]) {
-            stdout(arg);
-            conn.end();
-            resolve(true);
           }).stderr.on('data', function (data: string) {
             stderr('STDERR: ' + data);
           });
