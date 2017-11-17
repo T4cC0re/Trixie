@@ -277,7 +277,14 @@ export class SRVDB {
     const ret = {};
 
     for (const host of hosts) {
+      if (!ret[host]) {
+        ret[host] = {};
+      }
+      if (!ret[host].serviceNames) {
+        ret[host].serviceNames = [];
+      }
       ret[host].serviceNames.push(...(await this.getServicenames(host)));
+      ret[host].net = await this.getValues(host, 'net');
     }
 
     return ret;

@@ -4,7 +4,7 @@ import 'libError';
 import { Platform1 } from '../shared/platform1';
 import { VMWare } from '../shared/vmware';
 import { ActionOutput, ActionRunner } from './ActionRunner';
-import { createServer, Next, plugins, Request as rRequest, Response } from 'restify';
+import { createServer, Next, plugins, Request as rRequest, Response, ServerOptions } from 'restify';
 import * as jsonwebtoken from 'jsonwebtoken';
 import { Util } from '../shared/util';
 import { ClientRPC } from 'libRPC';
@@ -237,7 +237,7 @@ setImmediate(async () => {
     let params = [];
 
     if (req.isUpload()) {
-
+      //TODO: Maybe have a upload for custom actions?
     }
 
     if (typeof req.body === 'object') {
@@ -266,8 +266,7 @@ setImmediate(async () => {
         (action as any as TrixieResponse).error = JSON.stringify(action.error);
       }
       console.error(action.error);
-      res.send(
-        500, action);
+      res.send(500, action);
       res.end();
       return next();
     }
@@ -278,7 +277,7 @@ setImmediate(async () => {
     return next();
   };
 
-  const options: any = {name: `Trixie`};
+  const options: ServerOptions = {name: `Trixie`};
   if (globalConfig.enableHTTPS) {
     options.key = readFileSync(globalConfig.secureKeyfile);
     options.certificate = readFileSync(globalConfig.secureCertificate);
@@ -293,59 +292,73 @@ setImmediate(async () => {
   server.get('/action/:action', performAction);
   server.get('/auth/:timeInSec', loginOrRefresh);
   server.get('/auth', loginOrRefresh);
-  server.on('error', (err) =>
-    logError(err),
-  );
+
   const ws = new Server({server: server.server});
   server.listen(globalConfig.enableHTTPS ? globalConfig.securePort : globalConfig.port, () => {
     console.log('%s listening at %s', server.name, server.url);
   });
+  server.on('error', (err) => {
+    console.error('server hung up...');
+    logError(err)
+  });
   ws.on('connection', async (socket, request) => {
+    //TODO: Move me to an external function
     let authentication: UserObject = null;
 
     socket.on('message', async (msg: string) => {
       try {
         const message = JSON.parse(msg || 'null');
-        console.log(message);
         const endpoint = message.action || request.url.replace('/action/', '') || 'help';
         if (message.action == 'auth') {
           let ok: boolean;
           try {
             ok = await auth(request as any, message.token);
-            console.log((request as any).userObj);
           } catch (_ignore) {
           }
-          if (ok) {
-            socket.send(JSON.stringify({fd: 2, log: `Authenticated to Trixie\n`, auth: true}));
-            authentication = (request as any).userObj;
+          if(socket.readyState === 1){
+            if (ok) {
+              socket.send(JSON.stringify({fd: 2, log: `Authenticated to Trixie\n`, auth: true}), err => {console.error('msg.if', err);logError(err)});
+              authentication = (request as any).userObj;
+            } else {
+              socket.send(JSON.stringify({fd: 2, log: `Auth failed!\n`, auth: false, finished: true, code: 1}), err => {console.error('msg.if', err);logError(err)});
+            }
           } else {
-            socket.send(JSON.stringify({fd: 2, log: `Auth failed!\n`, auth: false, finished: true, code: 1}));
+            console.error(`socket closed (${socket.readyState})`);
+            return;
           }
         } else {
           const result = await ar.run(socket, authentication, endpoint, ...(message.params || []));
-          if (result.error) {
-            let error: string;
-            try {
-              error = await formatError(result.error);
-            } catch (_ignore) {
-              error = JSON.stringify(result.error, null, 2);
+          if(socket.readyState === 1){
+            if (result.error) {
+              socket.send(JSON.stringify({fd: 2, log: await formatError(result.error), finished: true, code: 1}), err => {console.error('msg.else', err);logError(err)});
+            } else {
+              socket.send(JSON.stringify({finished: true, code: result.error ? 1 : 0}), err => {console.error('msg.else', err);logError(err)});
             }
-            socket.send(JSON.stringify({fd: 2, log: error}));
+          } else {
+            console.error(`socket closed (${socket.readyState})`);
+            return;
           }
-          socket.send(JSON.stringify({finished: true, code: result.error ? 1 : 0}));
         }
       } catch (e) {
-        let error: string;
-        try {
-          error = await formatError(e);
-        } catch (_ignore) {
-          error = JSON.stringify(e, null, 2);
+        if(socket.readyState === 1){
+          socket.send(JSON.stringify({fd: 2, log: await formatError(e)}), err => {console.error('msg.catch', err);logError(err)});
+        } else {
+          console.error(`socket closed (${socket.readyState})`);
+          return;
         }
-        socket.send(JSON.stringify({fd: 2, log: error}));
       }
-      console.log(`socket: ${msg}`);
+    })
+      .on('error', (err) => {
+      console.error('websocket-socket foo...');
+      logError(err);
     });
-    socket.send(JSON.stringify({fd: 2, log: `Connected to Trixie\n`}));
+    if(socket.readyState === 1){
+      socket.send(JSON.stringify({fd: 2, log: `Connected to Trixie\n`}), err => {console.error('connected', err);logError(err)});
+    }
+  })
+    .on('error', (err) => {
+    console.error('websocket-server foo...');
+    logError(err);
   });
 
   // EXAMPLES:

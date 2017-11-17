@@ -1,9 +1,9 @@
 'use strict';
 
-import { spawnSync, SpawnSyncReturns } from 'child_process';
-import { accessSync, lstatSync, readdirSync, realpathSync } from "fs";
-import { R_OK, X_OK } from "constants";
-import { delimiter, join } from "path";
+import { SpawnSyncReturns, execFile } from 'child_process';
+import { accessSync, lstatSync, readdirSync, realpathSync } from 'fs';
+import { R_OK, X_OK } from 'constants';
+import { delimiter, join } from 'path';
 
 export class GOVCWrapper {
 
@@ -90,28 +90,44 @@ export class GOVCWrapper {
     return null;
   };
 
-  public launch = async (...params: string[]): Promise<SpawnSyncReturns<string>> => {
-    if (params.length >= 1 && params[0] == 'env') {
-      console.error('env command is prohibited');
-      return null;
-    }
-
-    console.log(`AUDIT\tGOVC\t['${params.join(`' '`)}']`);
-
-    return spawnSync(
-      this.binary,
-      params,
-      {
-        env: {
-          GOVC_USERNAME: this.username,
-          GOVC_PASSWORD: this.password,
-          GOVC_INSECURE: 'true',
-          GOVC_PERSIST_SESSION: 'true',
-          GOVC_URL: this.vcenter
-        },
-        shell: false,
-        encoding: 'utf8'
+  public launch = (...params: string[]): Promise<SpawnSyncReturns<string>> => {
+    return new Promise<SpawnSyncReturns<string>>(resolve => {
+      if (params.length >= 1 && params[0] == 'env') {
+        console.error('env command is prohibited');
+        return resolve(null);
       }
-    );
-  }
+
+      console.log(`AUDIT\tGOVC\t['${params.join(`' '`)}']`);
+
+      execFile(this.binary,
+        params,
+        {
+          maxBuffer: 2 * 1024 * 1024, // 2 MiB buffer
+          encoding: 'utf8',
+          env: {
+            GOVC_USERNAME: this.username,
+            GOVC_PASSWORD: this.password,
+            GOVC_INSECURE: 'true',
+            GOVC_PERSIST_SESSION: 'true',
+            GOVC_URL: this.vcenter,
+          },
+        }, (error: any, stdout: string, stderr: string) => {
+          let status = 0;
+          let signal = '';
+          if (error) {
+            status = error.code;
+            signal = error.signal;
+          }
+          resolve({
+            status,
+            signal,
+            stdout,
+            stderr,
+            pid: 0,
+            output: [],
+            error,
+          });
+        });
+    });
+  };
 }

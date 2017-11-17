@@ -15,5 +15,8 @@ declare const platform1: Platform1;
 declare const Util: Util;
 declare const log: OutputLogger;
 declare const error: OutputLogger;
+declare const writeOut: OutputLogger;
+declare const writeErr: OutputLogger;
 declare const user: UserObject;
 declare const ssh: SSH;
+declare const sleep: (secs:number) => Promise<void>;

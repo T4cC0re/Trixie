@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "dependencies": {
-    "@types/restify": "^5.0.3",
+    "@types/restify": "^5.0.6",
     "@types/ssh2": "^0.5.35",
     "@types/ws": "^3.2.0",
     "ip": "^1.1.5",
@@ -13,13 +13,14 @@
     "libRPC": "github:T4cC0re/libRPC",
     "netmask": "^1.0.6",
     "ping": "^0.2.2",
+    "queue": "^4.4.2",
     "request": "^2.81.0",
     "request-promise-native": "^1.0.4",
     "restify": "^5.2.0",
     "ssh2": "^0.5.5",
     "stream-cache": "0.0.2",
     "stream-to-string": "^1.1.0",
-    "ws": "^3.3.0"
+    "ws": "^3.3.1"
   },
   "scripts": {
     "postinstall": "tsc -p ."
@@ -28,9 +29,9 @@
     "@types/ip": "0.0.30",
     "@types/jsonwebtoken": "^7.2.3",
     "@types/netmask": "^1.0.30",
-    "@types/node": "^8.0.28",
-    "@types/request-promise-native": "^1.0.6",
-    "typescript": "^2.1"
+    "@types/node": "^8.0.53",
+    "@types/request-promise-native": "^1.0.10",
+    "typescript": "^2.6.1"
   },
   "main": "./server/index.js",
   "typings": "./server/index.d.ts"

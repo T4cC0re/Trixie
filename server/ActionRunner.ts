@@ -8,7 +8,7 @@ import { Util } from '../shared/util';
 import Process = NodeJS.Process;
 import Global = NodeJS.Global;
 import WebSocket = require('ws');
-import {UserObject} from './trixie';
+import { UserObject } from './trixie';
 import { SSH } from '../shared/ssh';
 
 const StreamCache = require('stream-cache');
@@ -29,6 +29,8 @@ interface Sandbox extends Global {
   Util: Util
   error: OutputLogger
   log: OutputLogger
+  writeOut?: OutputLogger
+  writeErr?: OutputLogger
   action: Function | null
   trixieAPI: number
   __outputBuffer: OutputLine[]
@@ -56,13 +58,15 @@ export class ActionRunner {
     return subAction.returnValue;
   };
 
-  private log = (buffer: OutputLine[], ws: WebSocket, fd: 1 | 2, ...log: any[]): void => {
+  private log = (buffer: OutputLine[], ws: WebSocket, newline: boolean, fd: 1 | 2, ...log: any[]): void => {
     log.forEach((entry) => {
       if (ws) {
-        if (typeof entry != 'string') {
-          ws.send(JSON.stringify({fd: fd, log: JSON.stringify(entry) + '\n'}));
-        } else {
-          ws.send(JSON.stringify({fd: fd, log: entry + '\n'}));
+        if (ws.readyState === 1) {
+          if (typeof entry != 'string') {
+            ws.send(JSON.stringify({fd: fd, log: JSON.stringify(entry)}));
+          } else {
+            ws.send(JSON.stringify({fd: fd, log: entry}));
+          }
         }
       } else {
         if (typeof entry != 'string') {
@@ -72,7 +76,22 @@ export class ActionRunner {
         }
       }
     });
-    buffer.push({fd: fd, log: '\n'});
+
+    if (newline) {
+      if (ws) {
+        if (ws.readyState === 1) {
+          ws.send(JSON.stringify({fd: fd, log: '\n'}));
+        }
+      } else {
+        buffer.push({fd: fd, log: '\n'});
+      }
+    }
+  };
+
+  private sleep = (sec: number): Promise<void> => {
+    return new Promise(resolve => {
+      setTimeout(resolve, sec * 1000);
+    });
   };
 
   private buildSandbox = (reqId: string, user: UserObject, ws: WebSocket = null): Sandbox => {
@@ -82,6 +101,7 @@ export class ActionRunner {
       {
         require: require,
         ssh: this.ssh,
+        sleep: this.sleep,
         vmware: this.vmware,
         platform1: this.p1,
         Util: Util,
@@ -94,10 +114,16 @@ export class ActionRunner {
     ) as any as Sandbox;
 
     sandbox.log = (...log: any[]) => {
-      this.log(sandbox.__outputBuffer, ws, 1, ...log);
+      this.log(sandbox.__outputBuffer, ws, true, 1, ...log);
     };
     sandbox.error = (...log: any[]) => {
-      this.log(sandbox.__outputBuffer, ws, 2, ...log);
+      this.log(sandbox.__outputBuffer, ws, true, 2, ...log);
+    };
+    sandbox.writeOut = (...log: any[]) => {
+      this.log(sandbox.__outputBuffer, ws, false, 1, ...log);
+    };
+    sandbox.writeErr = (...log: any[]) => {
+      this.log(sandbox.__outputBuffer, ws, false, 2, ...log);
     };
     sandbox.process = Object.assign({}, process, {
       stdout: new StreamCache(),
@@ -124,7 +150,7 @@ export class ActionRunner {
       ws = req;
       reqId = 'WebSocket';
     }
-    // console.log(`AUDIT\tACTION\t${reqId || 'internal'}\t${action}\t${JSON.stringify(args)}`);
+    console.log(`AUDIT\tACTION\t${reqId || 'internal'}\t${action}\t${JSON.stringify(args)}`);
 
     let script = null;
     try {

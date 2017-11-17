@@ -8,15 +8,6 @@
     ],
     "comment": "Override chef environments in chefenv.json"
   },
-  "debug": {
-    "isPinf": false,
-    "domain": "debug",
-    "networks": [
-      "VM Network",
-      "v10"
-    ],
-    "comment": "Used in development"
-  },
   "nuev1": {
     "isPinf": false,
     "domain": "DOM1",

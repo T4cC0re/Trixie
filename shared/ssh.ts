@@ -19,25 +19,26 @@ export class SSH {
     return new Promise<boolean>((resolve) => {
       const conn = new Client();
       conn.on('ready', function () {
-        stdout('Client :: ready');
+        stdout('SSH :: Client :: ready\n');
         conn.exec(command.join(' '), function (err: Error, stream: any) {
           if (err) throw err;
-          stream.on('close', function (code: number, signal: number) {
-            stdout('Stream :: close :: code: ' + code + ', signal: ' + signal);
+          stream.on('close', (code: number, signal: number) => {
+            stdout('SSH :: Stream :: close :: code: ' + code + ', signal: ' + signal + '\n');
             conn.end();
             resolve(code <= 0);
-          }).on('data', function (data: string) {
-            stdout('STDOUT: ' + data);
-          }).stderr.on('data', function (data: string) {
-            stderr('STDERR: ' + data);
+          }).on('data', (data: Buffer) => {
+            stdout(data.toString());
+          }).stderr.on('data', (data: Buffer) => {
+            stderr(data.toString());
           });
         });
-      }).on('error', function (err: Error) {
-        stderr(err);
+      }).on('error', async (err: Error) => {
+        stderr(await formatError(err));
         resolve(false);
       }).connect({
         host: host,
         port: 22,
+
         hostHash: 'sha1',
         hostVerifier: () => true,
         username: username,
